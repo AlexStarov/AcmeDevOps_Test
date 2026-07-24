@@ -4,12 +4,13 @@ This repository is the hands-on portion (Part B) of the DevOps / Platform Engine
 
 ## Setup
 
-1. Clone this repository
-2. Create branch: `assessment/<your-name>`
-3. Read the assessment PDF provided by the hiring team
-4. Complete Part A in `docs/architecture-proposal.md` (or PDF)
-5. Complete Part B fixes in this repository
-6. Grant repository access to reviewers when done
+1. Copy this repository to **your own GitHub account** (fork, duplicate, or push to a new private repo)
+2. Read the assessment PDF provided by the hiring team
+3. Complete Part A in `docs/architecture-proposal.md` (or PDF) in your repository
+4. Complete Part B fixes in your repository
+5. Share your repository URL with reviewers and grant them read access
+
+Do not push branches or open pull requests in the starter repository provided by the hiring team.
 
 ## Structure
 
