@@ -1,0 +1,31 @@
+# INTENTIONALLY INSECURE - candidate must fix
+
+replicaCount: 1
+
+image:
+  repository: 123456789012.dkr.ecr.eu-central-1.amazonaws.com/billing-service/app
+  tag: latest
+  pullPolicy: Always
+
+service:
+  type: ClusterIP
+  port: 3000
+
+ingress:
+  enabled: false
+  hostname: cell-01.platform.example.com
+
+# BAD: secrets in plain text
+secrets:
+  dbPassword: "change-me-in-production"
+  jwtSecret: "super-secret-jwt-key-do-not-use"
+  stripeKey: "sk_test_placeholder"
+
+env:
+  nodeEnv: development
+  pgSslMode: no-verify
+  devExposeTokens: "true"
+  adminSeedPassword: "change-me"
+
+resources: {}
+# INTENTIONALLY MISSING: limits, securityContext, probes, NetworkPolicy

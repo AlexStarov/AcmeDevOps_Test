@@ -1,0 +1,10 @@
+node_modules/
+dist/
+.terraform/
+*.tfstate
+*.tfstate.*
+.terraform.lock.hcl
+*.tfvars
+!terraform/terraform.tfvars.example
+.DS_Store
+.env

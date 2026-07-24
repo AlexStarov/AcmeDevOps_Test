@@ -1,0 +1,42 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "billing-service.fullname" . }}
+  labels:
+    {{- include "billing-service.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "billing-service.selectorLabels" . | nindent 6 }}
+  template:
+    metadata:
+      labels:
+        {{- include "billing-service.selectorLabels" . | nindent 8 }}
+    spec:
+      # INTENTIONALLY MISSING: securityContext, serviceAccount
+      containers:
+        - name: billing-service
+          image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - containerPort: 3000
+          env:
+            - name: NODE_ENV
+              value: {{ .Values.env.nodeEnv | quote }}
+            - name: PORT
+              value: "3000"
+            - name: PGSSLMODE
+              value: {{ .Values.env.pgSslMode | quote }}
+            - name: DEV_EXPOSE_TOKENS
+              value: {{ .Values.env.devExposeTokens | quote }}
+            - name: ADMIN_SEED_PASSWORD
+              value: {{ .Values.env.adminSeedPassword | quote }}
+            # BAD: secrets from values.yaml
+            - name: DB_PASS
+              value: {{ .Values.secrets.dbPassword | quote }}
+            - name: AUTH_JWT_SECRET
+              value: {{ .Values.secrets.jwtSecret | quote }}
+            - name: STRIPE_SECRET_KEY
+              value: {{ .Values.secrets.stripeKey | quote }}
+          # INTENTIONALLY MISSING: livenessProbe, readinessProbe, resources
