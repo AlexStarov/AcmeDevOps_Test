@@ -24,12 +24,21 @@ resource "aws_subnet" "public" {
   tags = { Name = "${var.environment}-public" }
 }
 
-resource "aws_subnet" "private" {
+resource "aws_subnet" "private_a" {
   vpc_id            = aws_vpc.main.id
   cidr_block        = "10.100.2.0/24"
   availability_zone = "${var.aws_region}a"
 
-  tags = { Name = "${var.environment}-private" }
+  tags = { Name = "${var.environment}-private-a" }
+}
+
+# Second private subnet in a different AZ — required by RDS subnet groups
+resource "aws_subnet" "private_b" {
+  vpc_id            = aws_vpc.main.id
+  cidr_block        = "10.100.3.0/24"
+  availability_zone = "${var.aws_region}b"
+
+  tags = { Name = "${var.environment}-private-b" }
 }
 
 resource "aws_internet_gateway" "igw" {
@@ -49,27 +58,19 @@ resource "aws_route_table_association" "public" {
   route_table_id = aws_route_table.public.id
 }
 
-# --- Security Group: INTENTIONALLY INSECURE ---
+# --- Security Groups ---
 
 resource "aws_security_group" "k3s_node" {
   name        = "${var.environment}-k3s-node"
-  description = "INTENTIONALLY INSECURE - candidate must fix"
+  description = "aws_security_group : K3s node security group"
   vpc_id      = aws_vpc.main.id
 
   ingress {
-    description = "K8s API - BAD: open to world"
+    description = "K8s API - internal VPC access only"
     from_port   = 6443
     to_port     = 6443
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
-  }
-
-  ingress {
-    description = "SSH - BAD: open to world"
-    from_port   = 22
-    to_port     = 22
-    protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    cidr_blocks = [aws_vpc.main.cidr_block]
   }
 
   egress {
@@ -92,23 +93,43 @@ resource "aws_security_group" "rds" {
   }
 }
 
-# --- IAM: INTENTIONALLY INSECURE ---
+# --- IAM ---
 
 resource "aws_iam_user" "admin" {
   name = var.admin_user_name
   path = "/"
 }
 
-resource "aws_iam_user_policy_attachment" "admin_access" {
-  user       = aws_iam_user.admin.name
-  policy_arn = "arn:aws:iam::aws:policy/AdministratorAccess"
+resource "aws_iam_role" "k3s_node" {
+  name = "${var.environment}-k3s-node-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "ec2.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
+  })
+
+  tags = { Environment = var.environment }
 }
 
-# --- RDS: missing storage_encrypted ---
+resource "aws_iam_role_policy_attachment" "k3s_node_ssm" {
+  role       = aws_iam_role.k3s_node.name
+  policy_arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+resource "aws_iam_instance_profile" "k3s_node" {
+  name = "${var.environment}-k3s-node-profile"
+  role = aws_iam_role.k3s_node.name
+}
+# --- RDS ---
 
 resource "aws_db_subnet_group" "main" {
-  name       = "${var.environment}-db-subnet"
-  subnet_ids = [aws_subnet.private.id, aws_subnet.public.id]
+  name = "${var.environment}-db-subnet"
+  # Only private subnets — RDS must never be reachable from the public subnet
+  subnet_ids = [aws_subnet.private_a.id, aws_subnet.private_b.id]
 }
 
 resource "aws_db_instance" "billing" {
@@ -124,13 +145,30 @@ resource "aws_db_instance" "billing" {
   db_subnet_group_name        = aws_db_subnet_group.main.name
   vpc_security_group_ids      = [aws_security_group.rds.id]
   publicly_accessible         = false
-  # INTENTIONALLY MISSING: storage_encrypted = true
+  storage_encrypted           = true
 }
 
-# --- S3: no encryption, no public access block ---
+# --- S3 ---
 
 resource "aws_s3_bucket" "billing_exports" {
   bucket = "${var.environment}-billing-exports-assessment-${random_id.bucket.hex}"
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "billing_exports_encryption" {
+  bucket = aws_s3_bucket.billing_exports.id
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
+}
+
+resource "aws_s3_bucket_public_access_block" "billing_exports_public_block" {
+  bucket                  = aws_s3_bucket.billing_exports.id
+  block_public_acls       = true
+  block_public_policy     = true
+  ignore_public_acls      = true
+  restrict_public_buckets = true
 }
 
 resource "random_id" "bucket" {
@@ -144,6 +182,7 @@ resource "aws_instance" "k3s_node" {
   instance_type          = "t3.medium"
   subnet_id              = aws_subnet.public.id
   vpc_security_group_ids = [aws_security_group.k3s_node.id]
+  iam_instance_profile   = aws_iam_instance_profile.k3s_node.name
 
   tags = {
     Name        = "${var.environment}-k3s-node"

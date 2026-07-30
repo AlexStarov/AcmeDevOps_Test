@@ -12,6 +12,11 @@ terraform {
     }
   }
 
-  # INTENTIONALLY MISSING: remote backend block
-  # Candidates should add S3 + DynamoDB lock and document in README
+  backend "s3" {
+    bucket         = "acme-terraform-state"
+    key            = "cell-01/terraform.tfstate"
+    region         = "eu-central-1"
+    encrypt        = true
+    dynamodb_table = "acme-terraform-locks"
+  }
 }

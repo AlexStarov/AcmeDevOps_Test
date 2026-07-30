@@ -1,5 +1,3 @@
-# INTENTIONALLY INSECURE - candidate must fix
-
 replicaCount: 1
 
 image:
@@ -15,11 +13,8 @@ ingress:
   enabled: false
   hostname: cell-01.platform.example.com
 
-# BAD: secrets in plain text
-secrets:
-  dbPassword: "change-me-in-production"
-  jwtSecret: "super-secret-jwt-key-do-not-use"
-  stripeKey: "sk_test_placeholder"
+# External secret containing DB_PASS, AUTH_JWT_SECRET, STRIPE_SECRET_KEY
+existingSecret: "billing-service-secrets"
 
 env:
   nodeEnv: development
@@ -27,5 +22,37 @@ env:
   devExposeTokens: "true"
   adminSeedPassword: "change-me"
 
-resources: {}
-# INTENTIONALLY MISSING: limits, securityContext, probes, NetworkPolicy
+podSecurityContext:
+  runAsUser: 1000
+  runAsGroup: 3000
+  fsGroup: 2000
+
+securityContext:
+  readOnlyRootFilesystem: true
+  allowPrivilegeEscalation: false
+  runAsNonRoot: true
+
+resources:
+  requests:
+    cpu: 100m
+    memory: 128Mi
+  limits:
+    cpu: 500m
+    memory: 256Mi
+
+livenessProbe:
+  httpGet:
+    path: /health
+    port: 3000
+  initialDelaySeconds: 15
+  periodSeconds: 20
+
+readinessProbe:
+  httpGet:
+    path: /health
+    port: 3000
+  initialDelaySeconds: 5
+  periodSeconds: 10
+
+networkPolicy:
+  enabled: false

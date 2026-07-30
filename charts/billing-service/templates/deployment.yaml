@@ -14,9 +14,12 @@ spec:
       labels:
         {{- include "billing-service.selectorLabels" . | nindent 8 }}
     spec:
-      # INTENTIONALLY MISSING: securityContext, serviceAccount
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
         - name: billing-service
+          securityContext:
+            {{- toYaml .Values.securityContext | nindent 12 }}
           image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
@@ -32,11 +35,24 @@ spec:
               value: {{ .Values.env.devExposeTokens | quote }}
             - name: ADMIN_SEED_PASSWORD
               value: {{ .Values.env.adminSeedPassword | quote }}
-            # BAD: secrets from values.yaml
             - name: DB_PASS
-              value: {{ .Values.secrets.dbPassword | quote }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.existingSecret }}
+                  key: dbPassword
             - name: AUTH_JWT_SECRET
-              value: {{ .Values.secrets.jwtSecret | quote }}
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.existingSecret }}
+                  key: jwtSecret
             - name: STRIPE_SECRET_KEY
-              value: {{ .Values.secrets.stripeKey | quote }}
-          # INTENTIONALLY MISSING: livenessProbe, readinessProbe, resources
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.existingSecret }}
+                  key: stripeKey
+          livenessProbe:
+            {{- toYaml .Values.livenessProbe | nindent 12 }}
+          readinessProbe:
+            {{- toYaml .Values.readinessProbe | nindent 12 }}
+          resources:
+            {{- toYaml .Values.resources | nindent 12 }}
